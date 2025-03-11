@@ -63,9 +63,8 @@ void reg2irr_translate(
   phase_buf.set_final_data(nullptr);
 
   queue q;
-  //for(long int aBox = box[iBox].farStart; aBox <= box[iBox].farStart + box[iBox].nFar - 1; aBox++) {
-
-    long int aBox = box[iBox].farStart;
+  for(long int aBox = box[iBox].farStart; aBox <= box[iBox].farStart + box[iBox].nFar - 1; aBox++) {
+   // long int aBox = box[iBox].farStart;
     int jBox = farNeighbors[aBox-1];  // unit-based fortran array
 
     buffer <std::complex<double>, 1> bExpansion_buf{ box[jBox].regExpansion, range<1>(nSzTri+1) };
@@ -167,9 +166,25 @@ void reg2irr_translate(
        });
      });
 
-  //}
+  }
 
   return;
+}
+
+void CompareExpansions(const std::complex<double>* a, const std::complex<double>* b, double zero, int nSzTri) {
+    int errors = 0;
+    for (int i = 0; i <= nSzTri; ++i) {
+        std::complex<double> diff = a[i] - b[i];
+        if (std::abs(diff.real()) + std::abs(diff.imag()) > zero) {
+            if (errors < 10) {
+                std::cout << "Error: expansions do not match for array element " << i << std::endl;
+                std::cout << "Expansion 1: " << a[i].real() << " " << a[i].imag() << std::endl;
+                std::cout << "Expansion 2: " << b[i].real() << " " << b[i].imag() << std::endl;
+            }
+            errors++;
+        }
+    }
+    if (errors != 0) exit(1);
 }
 
 int main(){
@@ -214,6 +229,10 @@ int main(){
 
   reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
 
-  std::cout << cc[15] << std::endl;
+  //std::cout << cc[15] << std::endl;
+
+  CompareExpansions(irrExpansion, cc, 1.0e-8, nSzTri);
+
+  std::cout << "got past error, ok" << std::endl;
 
 }
