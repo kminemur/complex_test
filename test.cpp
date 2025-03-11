@@ -225,13 +225,13 @@ int main(){
       for (int j = 0; j <= nSzTri; ++j) {
           boxFile >> box[i].regExpansion[j] >> box[i].irrExpansion[j];
           //std::cout << std::scientific << std::setprecision(15) << box[i].regExpansion[j] << std::endl;
+          //std::cout << std::scientific << std::setprecision(15) << box[i].irrExpansion[j] << std::endl;
       }
   }
   for (int i = 0; i <= nSzTri; ++i) {
       irrExpansionFile >> irrExpansion[i];
-      std:cout << std::scientific << std::setprecision(15) << irrExpansion[i] << std::endl;
+      //std:cout << std::scientific << std::setprecision(15) << irrExpansion[i] << std::endl;
   }
-
 
   //reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
 
