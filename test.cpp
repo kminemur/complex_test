@@ -10,12 +10,10 @@
 #include <sycl/sycl.hpp>
 #include <complex>
 #include <fstream>
+#include <iomanip>
 
 using namespace std;
 using namespace sycl;
-
-
-
 
 typedef struct {
   long int parent;
@@ -188,7 +186,7 @@ void CompareExpansions(const std::complex<double>* a, const std::complex<double>
 }
 
 int main(){
-  int nSzTri = 230;
+  const int nSzTri = 230;
   long int iBox = 73;
   int nL = 20;
 
@@ -207,9 +205,11 @@ int main(){
 
   for (int i = 0; i <= nSzTri; ++i) {
       trLFile >> trL[i];
+      //std:cout << trL[i] << std::endl;
   }
   for (int i = 0; i < 137664; ++i) {
       ffarNeighborsFile >> ffarNeighbors[i];
+      //std::cout << ffarNeighbors[i] << std::endl;
   }
   for (int i = 0; i < 586; ++i) {
       boxFile >> box[i].parent >> box[i].xyz[0] >> box[i].xyz[1] >> box[i].xyz[2]
@@ -218,16 +218,22 @@ int main(){
               >> box[i].nearStart >> box[i].nearEnd >> box[i].nNear
               >> box[i].farStart >> box[i].farEnd >> box[i].nFar
               >> box[i].proc;
+
+      //std::cout << box[i].parent << " " << box[i].xyz[0] << " " << box[i].xyz[1]
+        //      << " " << box[i].xyz[2] << " " << box[i].nFar << " " << box[i].proc << std::endl;
+
       for (int j = 0; j <= nSzTri; ++j) {
-          // boxFile >> box[i].chargeExpansion[j] >> box[i].potentialExpansion[j];
           boxFile >> box[i].regExpansion[j] >> box[i].irrExpansion[j];
+          //std::cout << std::scientific << std::setprecision(15) << box[i].regExpansion[j] << std::endl;
       }
   }
   for (int i = 0; i <= nSzTri; ++i) {
       irrExpansionFile >> irrExpansion[i];
+      std:cout << std::scientific << std::setprecision(15) << irrExpansion[i] << std::endl;
   }
 
-  reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
+
+  //reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
 
   //std::cout << cc[15] << std::endl;
 
