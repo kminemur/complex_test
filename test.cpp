@@ -176,8 +176,8 @@ void CompareExpansions(const std::complex<double>* a, const std::complex<double>
         if (std::abs(diff.real()) + std::abs(diff.imag()) > zero) {
             if (errors < 10) {
                 std::cout << "Error: expansions do not match for array element " << i << std::endl;
-                std::cout << "Expansion 1: " << a[i].real() << " " << a[i].imag() << std::endl;
-                std::cout << "Expansion 2: " << b[i].real() << " " << b[i].imag() << std::endl;
+                std::cout << std::scientific << std::setprecision(15) << "Expansion 1: " << a[i].real() << " " << a[i].imag() << std::endl;
+                std::cout << std::scientific << std::setprecision(15) << "Expansion 2: " << b[i].real() << " " << b[i].imag() << std::endl;
             }
             errors++;
         }
