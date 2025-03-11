@@ -11,7 +11,7 @@
 #include <complex>
 #include <fstream>
 
-using namespace std; 
+using namespace std;
 using namespace sycl;
 
 
@@ -31,7 +31,7 @@ typedef struct {
 
 // M2L transformation: Convert regular multipole expansion defined about origin A
 // into irregular multipole expansion defined about origin B
-void reg2irr_translate( 
+void reg2irr_translate(
                           cube* box,
                           long int iBox,
                           int* farNeighbors,
@@ -95,7 +95,7 @@ void reg2irr_translate(
         double ar2 = ar * ar;
         double ar3 = ar * ar2;
         double xar2 =  x * ar2;
-        double yar2 = -y * ar2; 
+        double yar2 = -y * ar2;
         double inL = double(idx == nL);
         double iMneg = double(Midx < 0);
         double iMpos = double(Midx >= 0);
@@ -105,20 +105,20 @@ void reg2irr_translate(
         bb[idx]       = inL * bExpansion_gpu[0];
 
         aa[nSq + idx] = inL * z * ar3                // (1,0) and (1,1)
-                      + double(idx != nL) * std::complex<double>(((idx < nL) - (idx > nL)) * x * ar3, -y * ar3); 
+                      + double(idx != nL) * std::complex<double>(((idx < nL) - (idx > nL)) * x * ar3, -y * ar3);
 
         bb[nSq + idx] = inL * bExpansion_gpu[1]
                       - double(Midx == -1) * conj(bExpansion_gpu[2])
                       + double(Midx ==  1) * bExpansion_gpu[2];
 
         for(int Lidx = 2; Lidx <= nL; Lidx++){
-          bb[nSq * Lidx + idx] = double(Mpos <= Lidx) * (iMneg * phase_gpu[Mpos%2] 
-                                                         * conj(bExpansion_gpu[Lidx*(Lidx+1)/2+Mpos]) 
+          bb[nSq * Lidx + idx] = double(Mpos <= Lidx) * (iMneg * phase_gpu[Mpos%2]
+                                                         * conj(bExpansion_gpu[Lidx*(Lidx+1)/2+Mpos])
                                                          + iMpos * bExpansion_gpu[Lidx*(Lidx+1)/2+Mpos]
                                                         );
           double twoLm1 = double(2*Lidx-1);
           if(Mpos < Lidx) {
-            aa[nSq*Lidx + idx] = (z * twoLm1 * aa[nSq*(Lidx-1) + idx] 
+            aa[nSq*Lidx + idx] = (z * twoLm1 * aa[nSq*(Lidx-1) + idx]
                                   - double((Lidx-1)*(Lidx-1) - Midx*Midx) * aa[nSq*(Lidx-2) + idx]
                                  ) * ar2;
             }
@@ -126,51 +126,51 @@ void reg2irr_translate(
             aa[nSq*Lidx + idx] = twoLm1 * std::complex<double>(ipm * xar2, yar2) * aa[nSq*(Lidx-1) + idx];
             aa[nSq*(Lidx-1) + idx] = 0.0;
           }
-        // }
+         }
        });
     });
 
-    // q->submit([&](handler &cgh) {
-    //   auto cExpansion_gpu = cExpansion_buf.get_access<access::mode::read_write>(cgh);
-    //   auto phase_gpu =           phase_buf.get_access<access::mode::read>(cgh);
-    //   auto trL_gpu =               trL_buf.get_access<access::mode::read>(cgh);
-    //   auto aa =                     aa_buf.get_access<access::mode::read>(cgh);
-    //   auto bb =                     bb_buf.get_access<access::mode::read>(cgh);
+     q.submit([&](handler &cgh) {
+       auto cExpansion_gpu = cExpansion_buf.get_access<access::mode::read_write>(cgh);
+       auto phase_gpu =           phase_buf.get_access<access::mode::read>(cgh);
+       auto trL_gpu =               trL_buf.get_access<access::mode::read>(cgh);
+       auto aa =                     aa_buf.get_access<access::mode::read>(cgh);
+       auto bb =                     bb_buf.get_access<access::mode::read>(cgh);
 
-    //   auto sum = local_accessor<complex<double>, 1>(range<1>(nL+1), cgh);
+       auto sum = local_accessor<complex<double>, 1>(range<1>(nL+1), cgh);
 
-    //   range<2> global(nSzTri+1, nL+1);
-    //   range<2> local(1, nL+1);
-    //   cgh.parallel_for<class cc_compute>(nd_range<2>(global,local), [nL, nSq, trL_gpu, phase_gpu, aa, bb, cExpansion_gpu, sum] (nd_item<2> index) {
-    //     int i = index.get_global_id(0);
-    //     int JmL = index.get_local_id(1);   // local id of a work-item from sub-group (actually, work-group)
-    //     int Lidx = trL_gpu[i];
-    //     int Midx = i - Lidx * (Lidx + 1)/2;
-    //     int Jidx = JmL + Lidx;
+       range<2> global(nSzTri+1, nL+1);
+       range<2> local(1, nL+1);
+       cgh.parallel_for<class cc_compute>(nd_range<2>(global,local), [nL, nSq, trL_gpu, phase_gpu, aa, bb, cExpansion_gpu, sum] (nd_item<2> index) {
+         int i = index.get_global_id(0);
+         int JmL = index.get_local_id(1);   // local id of a work-item from sub-group (actually, work-group)
+         int Lidx = trL_gpu[i];
+         int Midx = i - Lidx * (Lidx + 1)/2;
+         int Jidx = JmL + Lidx;
 
-    //     sum[JmL] = 0.0;
-    //     for(int Kidx = -JmL; Kidx <= JmL; Kidx++) 
-    //       sum[JmL] += phase_gpu[(JmL)%2] * bb[nSq*(JmL) + nL+Kidx] * aa[nSq*Jidx + nL+Kidx+Midx];
+         sum[JmL] = 0.0;
+         for(int Kidx = -JmL; Kidx <= JmL; Kidx++)
+           sum[JmL] += phase_gpu[(JmL)%2] * bb[nSq*(JmL) + nL+Kidx] * aa[nSq*Jidx + nL+Kidx+Midx];
 
-    //     int offset = 1;
-    //     for(int cycle = 0; cycle < sycl::ceil(sycl::log2((double)(nL+1))); cycle++) {
-    //       index.barrier(access::fence_space::local_space); // wait for all work-items in the work-group to finish
-    //       if((JmL % (2*offset)) == 0 && JmL < nL+1 - offset) {
-    //         sum[JmL] += sum[JmL + offset];
-    //       }
-    //       offset *= 2;
-    //     }
+         int offset = 1;
+         for(int cycle = 0; cycle < sycl::ceil(sycl::log2((double)(nL+1))); cycle++) {
+           index.barrier(access::fence_space::local_space); // wait for all work-items in the work-group to finish
+           if((JmL % (2*offset)) == 0 && JmL < nL+1 - offset) {
+             sum[JmL] += sum[JmL + offset];
+           }
+           offset *= 2;
+         }
 
-    //     if(JmL == 0)
-    //       cExpansion_gpu[i] += sum[0];
+         if(JmL == 0)
+           cExpansion_gpu[i] += sum[0];
 
-    //   });
-    // });
+       });
+     });
 
   //}
 
-  return; 
-} 
+  return;
+}
 
 int main(){
   int nSzTri = 230;
@@ -214,14 +214,6 @@ int main(){
 
   reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
 
+  std::cout << cc[15] << std::endl;
 
-  // void reg2irr_translate( 
-  //   cube *box,
-  //   long int& iBox,
-  //   long int* farNeighbors,
-  //   double& sideLength,
-  //   int& nL,                          // the largest value of L in the expansion
-  //   int* trL,                         // indices L for triangular array elements
-  //   int& nSzTri,                      // number of elements in triangular array
-  //   std::complex<double>* cExpansion  // the resulting expansion; accumulate the result
 }
