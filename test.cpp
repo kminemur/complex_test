@@ -1,19 +1,21 @@
-// #include <cassert>
-// #include <cstdio>
-// #include <cstdlib>
-// #include <iostream>
-// #include <cmath>
-// i#ide <algorithm>
-// #include <unistd.h>
-// #include <stdlib.h>
+//#include <cassert>
+//#include <cstdio>
+//#include <cstdlib>
+//#include <iostream>
+//#include <cmath>
+//#include <algorithm>
+//#include <unistd.h>
+//#include <stdlib.h>
 
 #include <sycl/sycl.hpp>
-#include <complex>
+//#include <complex>
 #include <fstream>
 #include <iomanip>
 
 using namespace std;
 using namespace sycl;
+
+queue* q;
 
 typedef struct {
   long int parent;
@@ -27,12 +29,38 @@ typedef struct {
   std::complex<double> irrExpansion[231];
 } cube;
 
+void init_sycl (void) {
+  sycl::async_handler ah = [](sycl::exception_list elist) {
+    for( auto &e : elist) {
+      try { std::rethrow_exception(e); }
+      catch (sycl::exception &ce) { std::cout << "Async Exception: " << ce.what() << std::endl; }
+      catch (std::exception &se) { std::cout << "Async Exception: " << se.what() << std::endl; }
+    }
+    exit(1);
+  };
+
+  q = new queue(default_selector_v, ah);
+
+  device d = q->get_device();
+  if (d.is_gpu()) {
+    std::cout << "Device: "
+              << q->get_device().get_info<info::device::name>()
+              << std::endl;
+  } else {
+    std::cerr << "Offload not running on GPU. Instead it uses " <<
+              d.get_platform().get_info<info::platform::name>() << std::endl;
+  }
+
+  return;
+}
+
+
 // M2L transformation: Convert regular multipole expansion defined about origin A
 // into irregular multipole expansion defined about origin B
 void reg2irr_translate(
                           cube* box,
                           long int iBox,
-                          int* farNeighbors,
+                          long int* farNeighbors,
                           double sideLength,
                           int nL,                          // the largest value of L in the expansion
                           int* trL,                         // indices L for triangular array elements
@@ -60,7 +88,6 @@ void reg2irr_translate(
   trL_buf.set_final_data(nullptr);
   phase_buf.set_final_data(nullptr);
 
-  queue q;
   for(long int aBox = box[iBox].farStart; aBox <= box[iBox].farStart + box[iBox].nFar - 1; aBox++) {
    // long int aBox = box[iBox].farStart;
     int jBox = farNeighbors[aBox-1];  // unit-based fortran array
@@ -73,16 +100,11 @@ void reg2irr_translate(
     z = double(box[jBox].xyz[2] - box[iBox].xyz[2]) * sideLength;
 
     // compute helper expansion aa
-    q.submit([&](handler &cgh) {
-      // auto aa = aa_buf.get_access<access::mode::discard_write>(cgh);
-      // auto bb = bb_buf.get_access<access::mode::discard_write>(cgh);
-      // auto bExpansion_gpu = bExpansion_buf.get_access<access::mode::read>(cgh);
-      // auto phase_gpu =           phase_buf.get_access<access::mode::read>(cgh);
-
-       accessor aa(aa_buf, cgh);
-       accessor bb(bb_buf, cgh);
-       accessor bExpansion_gpu(bExpansion_buf, cgh);
-       accessor phase_gpu(phase_buf, cgh);
+    q->submit([&](handler &cgh) {
+       auto aa = aa_buf.get_access<access::mode::discard_write>(cgh);
+       auto bb = bb_buf.get_access<access::mode::discard_write>(cgh);
+       auto bExpansion_gpu = bExpansion_buf.get_access<access::mode::read>(cgh);
+       auto phase_gpu =           phase_buf.get_access<access::mode::read>(cgh);
 
        cgh.parallel_for<class hexpan>(range<1>(nSq), [nL, nSq, aa, bb, bExpansion_gpu, phase_gpu, x,y,z] (item<1> index) {
         int idx = index[0];                    // worker index
@@ -127,7 +149,7 @@ void reg2irr_translate(
        });
     });
 
-     q.submit([&](handler &cgh) {
+     q->submit([&](handler &cgh) {
        auto cExpansion_gpu = cExpansion_buf.get_access<access::mode::read_write>(cgh);
        auto phase_gpu =           phase_buf.get_access<access::mode::read>(cgh);
        auto trL_gpu =               trL_buf.get_access<access::mode::read>(cgh);
@@ -146,8 +168,21 @@ void reg2irr_translate(
          int Jidx = JmL + Lidx;
 
          sum[JmL] = 0.0;
-         for(int Kidx = -JmL; Kidx <= JmL; Kidx++)
+         for(int Kidx = -JmL; Kidx <= JmL; Kidx++){
            sum[JmL] += phase_gpu[(JmL)%2] * bb[nSq*(JmL) + nL+Kidx] * aa[nSq*Jidx + nL+Kidx+Midx];
+
+         auto ph = phase_gpu[(JmL)%2];
+         auto na = (nL+1) * nSq;
+         auto nb = (nL+1) * nSq;
+         for(int Kidx = -JmL; Kidx <= JmL; Kidx++) {
+             auto ia = nSq*Jidx + nL+Kidx+Midx;
+             auto ib = nSq*(JmL) + nL+Kidx;
+             auto va = (ia < na) ? aa[ia] : 0.0;
+             auto vb = (ib < nb) ? bb[ib] : 0.0;
+             sum[JmL] += ph * va * vb;
+         }
+         }
+
 
          int offset = 1;
          for(int cycle = 0; cycle < sycl::ceil(sycl::log2((double)(nL+1))); cycle++) {
@@ -191,7 +226,7 @@ int main(){
   int nL = 20;
 
   cube box[586];
-  int ffarNeighbors[137664];
+  long int ffarNeighbors[137664];
   std::complex<double> irrExpansion[nSzTri + 1];
   std::complex<double> cc[nSzTri + 1];
   std::fill(cc, cc+nSzTri + 1, std::complex<double>(0., 0.));
@@ -233,7 +268,9 @@ int main(){
       //std:cout << std::scientific << std::setprecision(15) << irrExpansion[i] << std::endl;
   }
 
-  //reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
+  init_sycl();
+
+  reg2irr_translate(box, iBox, ffarNeighbors, 5.0, nL, trL, nSzTri, cc);
 
   //std::cout << cc[15] << std::endl;
 
